@@ -5,7 +5,7 @@ from audio_flamingo.model import AudioFlamingo
 text = torch.randint(0, 256, (1, 1024))
 audio = torch.randn(1, 16000)
 
-# Initialize GPT-3 model
+# Initialize AudioFlamingo model
 model = AudioFlamingo(
     dim=512,
     num_tokens=256,
