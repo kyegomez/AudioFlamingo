@@ -6,6 +6,7 @@ from einops import rearrange
 from torch import einsum, nn
 from torch.autograd import Function
 from zeta.nn import audio_to_text, Attention
+from zeta.structs import Transformer, Decoder, AutoregressiveWrapper
 
 # helper functions
 
@@ -388,7 +389,6 @@ class AudioFlamingoEncoderBlock(nn.Module):
         dim_head: int,
         dropout: int,
         context_dim: int,
-        # device: str,
         *args,
         **kwargs,
     ):
@@ -447,7 +447,6 @@ class AudioFlamingoEncoderBlock(nn.Module):
         """
         b, s = x.shape
         x = audio_to_text(x, seqlen=s, dim=self.dim)
-        print(x.shape)
 
         skip = x
 
@@ -468,20 +467,72 @@ class AudioFlamingoEncoderBlock(nn.Module):
         return x
 
 
-x = torch.randn(1, 1000)
+class AudioFlamingo(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        num_tokens: int,
+        max_seq_len: int,
+        heads: int,
+        depth: int,
+        dim_head: int,
+        dropout: float,
+        context_dim: int,
+        *args,
+        **kwargs,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.num_tokens = num_tokens
+        self.heads = heads
+        self.depth = depth
+        self.dim_head = dim_head
+        self.dropout = dropout
+        self.context_dim = context_dim
 
-# Model
-model = AudioFlamingoEncoderBlock(
-    dim=512,
-    heads=8,
-    depth=6,
-    dim_head=64,
-    dropout=0.1,
-    context_dim=512,
-)
+        self.transformer = Transformer(
+            num_tokens=num_tokens,
+            max_seq_len=max_seq_len,
+            emb_dim=dim,
+            post_emb_norm=True,
+            attn_layers=Decoder(
+                dim=dim,
+                depth=depth,
+                dim_head=dim_head,
+                heads=heads,
+                rotary_xpos=True,
+                attn_flash=True,
+            ),
+        )
 
-# Forward
-y = model(x)
+        self.decoder = AutoregressiveWrapper(self.transformer)
 
-# Output
-print(y.shape)
+        # AudioFlamingoEncoderBlock layers
+        self.af_blocks = nn.ModuleList([])
+        self.af_blocks.append(
+            AudioFlamingoEncoderBlock(
+                dim=dim,
+                heads=heads,
+                depth=depth,
+                dim_head=dim_head,
+                dropout=dropout,
+                context_dim=context_dim,
+                *args,
+                **kwargs,
+            )
+        )
+
+        # LayerNorm
+        self.norm = LayerNorm(dim)
+
+    def forward(self, text: Tensor, audio: Tensor):
+        # Text shape - (b, s, d)
+        # Audio shape - (b, s)
+
+        # Apply audio blocks to audio
+        for block in self.af_blocks:
+            audio = block(audio)
+            audio = self.norm(audio)
+
+        # Transformer
+        return self.decoder(text, context=audio)
