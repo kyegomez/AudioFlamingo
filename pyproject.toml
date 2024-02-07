@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "audio-flamingo"
-version = "0.0.3"
+version = "0.0.4"
 description = "Paper - Pytorch"
 license = "MIT"
 authors = ["Kye Gomez <kye@apac.ai>"]
@@ -26,6 +26,7 @@ python = "^3.6"
 swarms = "*"
 zetascale = "*"
 einops = "*"
+torch = "*"
 torchaudio = "*"
 
 [tool.poetry.group.lint.dependencies]
